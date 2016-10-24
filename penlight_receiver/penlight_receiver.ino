@@ -1,4 +1,6 @@
 #include <Adafruit_NeoPixel.h>
+#include <ArduinoJson.h>
+
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
@@ -14,6 +16,8 @@ char input[100];   // 文字列格納用
 int i = 0;  // 文字数のカウンタ
 
 int recv_data; // 受信データ
+
+StaticJsonBuffer<200> jsonBuffer;
    
 void setup() {
   Serial.begin(115200);
@@ -27,6 +31,7 @@ void setup() {
   // End of trinket special code
 
   pixels.begin(); // This initializes the NeoPixel library.
+
 }
 
 void loop() {
@@ -67,31 +72,41 @@ void loop() {
 //  
 //        }
 //    }
-    // 文字数が30以上 or 末尾文字
-    if (i > 9 || input[i] == '.') {
-      // 末尾に終端文字の挿入
-      //input[i] = '\0';
-      // 受信文字列を送信
-      
-      Serial.write(input);
-      
-      //Serial.write(input);
-      digitalWrite(13,HIGH);
+
+      if (i > 25) {
       i = 0;
-    }
-    else {
-      //digitalWrite(13,HIGH);
-      i++; 
-    }
-  }
+//      Serial.print(input);
+      StaticJsonBuffer<200> jsonBuffer;
+      JsonObject& root = jsonBuffer.parseObject(input);
+
+      // Test if parsing succeeds.
+        if (!root.success()) {
+          Serial.println("parseObject() failed");
+          return;
+        }
+        else{
+          int x  = root["x"];
+          int y  = root["y"];
+          int z  = root["z"];
+          Serial.print(x);
+          Serial.print(',');
+          Serial.print(y);
+          Serial.print(',');
+          Serial.println(z);
+        }
+      }
+      else{
+        i++;
+      }
+    }    
   else{
     digitalWrite(13, LOW);
     for(int i=0;i<NUMPIXELS;i++){
 
       // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-      //pixels.setPixelColor(i, pixels.Color(0,0,0)); // Moderately bright green color.
+      // pixels.setPixelColor(i, pixels.Color(0,0,0)); // Moderately bright green color.
   
-      //pixels.show(); // This sends the updated pixel color to the hardware.
+      // pixels.show(); // This sends the updated pixel color to the hardware.
 
     }
     delay(25);
