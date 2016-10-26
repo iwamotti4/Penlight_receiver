@@ -10,6 +10,7 @@
 #define NUMPIXELS      60
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 
 char input[100];   // 文字列格納用
@@ -73,7 +74,7 @@ void loop() {
 //        }
 //    }
 
-      if (i > 25) {
+      if (i > 35) {
       i = 0;
 //      Serial.print(input);
       StaticJsonBuffer<200> jsonBuffer;
@@ -82,17 +83,79 @@ void loop() {
       // Test if parsing succeeds.
         if (!root.success()) {
           Serial.println("parseObject() failed");
+          Serial.println(input);
           return;
         }
         else{
           int x  = root["x"];
           int y  = root["y"];
           int z  = root["z"];
+          unsigned char colors = root["color"];
           Serial.print(x);
           Serial.print(',');
           Serial.print(y);
           Serial.print(',');
-          Serial.println(z);
+          Serial.print(z);
+          Serial.print(',');
+          Serial.println(colors);
+
+          String color = "default";
+      for (int i = 0; i < 12; i++) {
+      switch (colors) {
+      case 0:
+        strip.setPixelColor(i, strip.Color(255, 0, 0));
+        color = "red";
+        break;
+      case 1:
+        strip.setPixelColor(i, strip.Color(0, 0, 255));
+        color = "blue";
+        break;
+      case 2:
+        strip.setPixelColor(i, strip.Color(255, 255, 255));
+        color = "white";
+        break;
+      case 3:
+        strip.setPixelColor(i, strip.Color(0, 0, 0));
+        color = "orange";
+        break;
+      case 4:
+        strip.setPixelColor(i, strip.Color(0, 255, 0));
+        color = "green";
+        break;
+      case 5:
+        strip.setPixelColor(i, strip.Color(255, 0, 255));
+        color = "purple";
+        break;
+      case 6:
+        strip.setPixelColor(i, strip.Color(0, 0, 0));
+        color = "light_pink";
+        break;
+      case 7:
+        strip.setPixelColor(i, strip.Color(0, 255, 255));
+        color  = "yellow";
+        break;
+      case 8:
+        strip.setPixelColor(i, strip.Color(100, 255, 100));
+        color = "light_green";
+        break;
+      case 9:
+        strip.setPixelColor(i, strip.Color(100, 100, 255));
+        color = "light_blue";
+        break;
+      case 10:
+        strip.setPixelColor(i, strip.Color(255, 100, 100));
+        color =  "pink";
+        break;
+      case 11:
+        strip.setPixelColor(i, strip.Color(255, 100, 255));
+        color = "light_purple";
+        break;
+      default:
+        break;
+    }
+    }
+
+    strip.show();
         }
       }
       else{
