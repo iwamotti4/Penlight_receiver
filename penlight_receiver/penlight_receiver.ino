@@ -1,107 +1,170 @@
-#include <Adafruit_NeoPixel.h>
+#include <SoftwareSerial.h>
 #include <ArduinoJson.h>
+#include <Adafruit_NeoPixel.h>
 
-#ifdef __AVR__
-  #include <avr/power.h>
-#endif
+SoftwareSerial TWE(5, 6); // RX, TX
+//識別ID
+#define ID 1
 
-#define PIN            6
+//pin指定
+#define NEOPIXEL 7 
+#define button_A 8
+#define button_B 9
+#define VIB 12
 
-#define NUMPIXELS      60
+//LEDの個数
+#define LED 10
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+//加速度
+int accel_x = 0;
+int accel_y = 0;
+int accel_z = 0;
 
+//振り判定
+int shaked = 0;
 
-char input[100];   // 文字列格納用
-int i = 0;  // 文字数のカウンタ
+//スイッチのカウント数
+unsigned char switchCount = 1;
 
-int recv_data; // 受信データ
+//ボタンの状態
+unsigned char buttonStateA = 0;
+unsigned char buttonStateB = 0;
+unsigned char backState = 0;
 
-StaticJsonBuffer<200> jsonBuffer;
-   
+unsigned long times;
+unsigned long timer;
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NEOPIXEL, NEO_GRB + NEO_KHZ800);
+
+char trans[50]; // 数字（文字列）の送信用配列
+  
 void setup() {
-  Serial.begin(115200);
-  pinMode(13, OUTPUT);
-  pinMode(6 , OUTPUT);
-
-  // This is for Trinket 5V 16MHz, you can remove these three lines if you are not using a Trinket
-#if defined (__AVR_ATtiny85__)
-  if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
-#endif
-  // End of trinket special code
-
-  pixels.begin(); // This initializes the NeoPixel library.
-
+  TWE.begin(38400);//TWE受信用
+  Serial.begin(38400);//TWE送信用
+  pinMode(NEOPIXEL, OUTPUT);
+  pinMode(button_A, INPUT_PULLUP);
+  pinMode(button_B, INPUT_PULLUP);
+  pinMode(VIB, OUTPUT);
+  neopixelColorBegin(LED);
+  switchCount = 0;
+  neopixelColorChange(switchCount,LED);
 }
 
 void loop() {
-  // データ受信したとき
-  if (Serial.available()) {
-    input[i] = Serial.read();
+  byte recv [60] = {};
+  byte count     = 0;
+  char input[60] = {};
+
+  accel_x = analogRead(A0);
+  accel_y = analogRead(A1);
+  accel_z = analogRead(A2);
+
+  //振り判定------------------------------------------
+  int s = shake(accel_x,accel_y,accel_z);
+//  Serial.print(s);
+  if(s > 1000 || s < 900){
+    shaked = 1;
     
-//    if(input[i] =='G'){
-//        Serial.println("GET_GREEN");
-//        for(int i=0;i<NUMPIXELS;i++){
-//
-//          // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-//          pixels.setPixelColor(i, pixels.Color(0,150,0)); // Moderately bright green color.
-//  
-//          pixels.show(); // This sends the updated pixel color to the hardware.
-//  
-//        }
-//    }
-//    if(input[i] == 'R'){
-//      Serial.println("GET_RED");
-//        for(int i=0;i<NUMPIXELS;i++){
-//
-//          // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-//          pixels.setPixelColor(i, pixels.Color(150,0,0)); // Moderately bright green color.
-//  
-//          pixels.show(); // This sends the updated pixel color to the hardware.
-//  
-//        }
-//    }
-//    if(input[i] == 'B'){
-//      Serial.println("GET_BLUE");
-//        for(int i=0;i<NUMPIXELS;i++){
-//
-//          // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-//          pixels.setPixelColor(i, pixels.Color(0,0,150)); // Moderately bright green color.
-//  
-//          pixels.show(); // This sends the updated pixel color to the hardware.
-//  
-//        }
-//    }
+  }
+  else {
+    shaked = 0;
+  }
 
-      if (i > 35) {
-      i = 0;
-//      Serial.print(input);
-      StaticJsonBuffer<200> jsonBuffer;
-      JsonObject& root = jsonBuffer.parseObject(input);
+  //ボタン処理------------------------------------------
+  buttonStateA = digitalRead(button_A);
+  buttonStateB = digitalRead(button_B);
 
-      // Test if parsing succeeds.
-        if (!root.success()) {
+  if (buttonStateA == 0)
+  {
+    switchCount += 1;
+    if (switchCount > 9) {
+            switchCount = 0;
+    }
+    neopixelColorChange(switchCount,LED);
+  }
+  if (buttonStateB == 0)
+  {
+    if (switchCount == 0 ) {
+            switchCount = 10;
+    }
+    switchCount -= 1;
+    neopixelColorChange(switchCount,LED);
+  }
+  //--------------------------------------------------
+  
+  //receive data
+  while (TWE.available())
+  {
+    recv [count] = TWE.read();
+    count++;
+  }
+
+  if (count > 0)
+  {
+    for (byte i = 0 ; i < count ; i++){
+      input[i] = (char)recv[i];
+    }
+    StaticJsonBuffer<100> jsonBuffer;
+    JsonObject& root = jsonBuffer.parseObject(input);
+    if (!root.success()) {
           Serial.println("parseObject() failed");
           Serial.println(input);
           return;
-        }
-        else{
-          int x  = root["x"];
-          int y  = root["y"];
-          int z  = root["z"];
-          unsigned char colors = root["color"];
-          Serial.print(x);
-          Serial.print(',');
-          Serial.print(y);
-          Serial.print(',');
-          Serial.print(z);
-          Serial.print(',');
-          Serial.println(colors);
+    }
+  else{
+      int x  = root["x"];
+      int y  = root["y"];
+      int z  = root["z"];
+      unsigned char colors = root["color"];
+      int shake = root["shake"];
+      times = millis();
+//    Serial.print(x);
+//    Serial.print(',');
+//    Serial.print(y);
+//    Serial.print(',');
+//    Serial.print(z);
+//    Serial.print(',');
+//    Serial.print(colors);
+//    Serial.print(',');
+//    Serial.println(times);
+      if(shake == 1){
+        digitalWrite(VIB, HIGH);
+      }
+      else{
+        digitalWrite(VIB, LOW);
+      switchCount =  colors;
+      neopixelColorChange(switchCount,LED);
+      }
+    }
+  }
+  else{
+//    if((millis() - start) > 5000 ){
+//      digitalWrite(LED, LOW);
+//      start = millis();
+//    }
+//    else{
+//      digitalWrite(LED,HIGH);
+//    }
+  }
+  
+  char *json = &trans[0];
+  sprintf(json, "{\"id\":%d,\"x\":%d,\"y\":%d,\"z\":%d,\"color\":%d,\"shake\":%d}", ID, accel_x, accel_y, accel_z, switchCount,shaked);
+  Serial.println(json);
+  delay(200);
+}
 
-          String color = "default";
-      for (int i = 0; i < 12; i++) {
-      switch (colors) {
+void neopixelColorBegin(int led){
+  strip.begin();
+  for (int i = 0; i > led; i--) {
+    strip.setPixelColor(i, strip.Color(0, 0, 0));
+  }
+  strip.show();
+}
+
+void neopixelColorChange(int count,int led){
+  char color ="default";
+  for (int i = 0; i < led; i++) {
+    switch (count) {
       case 0:
         strip.setPixelColor(i, strip.Color(255, 0, 0));
         color = "red";
@@ -115,7 +178,7 @@ void loop() {
         color = "white";
         break;
       case 3:
-        strip.setPixelColor(i, strip.Color(0, 0, 0));
+        strip.setPixelColor(i, strip.Color(255, 165, 0));
         color = "orange";
         break;
       case 4:
@@ -127,11 +190,11 @@ void loop() {
         color = "purple";
         break;
       case 6:
-        strip.setPixelColor(i, strip.Color(0, 0, 0));
+        strip.setPixelColor(i, strip.Color(255, 100, 100));
         color = "light_pink";
         break;
       case 7:
-        strip.setPixelColor(i, strip.Color(0, 255, 255));
+        strip.setPixelColor(i, strip.Color(255, 255, 0));
         color  = "yellow";
         break;
       case 8:
@@ -143,7 +206,7 @@ void loop() {
         color = "light_blue";
         break;
       case 10:
-        strip.setPixelColor(i, strip.Color(255, 100, 100));
+        strip.setPixelColor(i, strip.Color(255, 50, 50));
         color =  "pink";
         break;
       case 11:
@@ -153,51 +216,12 @@ void loop() {
       default:
         break;
     }
-    }
-
-    strip.show();
-        }
-      }
-      else{
-        i++;
-      }
-    }    
-  else{
-    digitalWrite(13, LOW);
-    for(int i=0;i<NUMPIXELS;i++){
-
-      // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-      // pixels.setPixelColor(i, pixels.Color(0,0,0)); // Moderately bright green color.
-  
-      // pixels.show(); // This sends the updated pixel color to the hardware.
-
-    }
-    delay(25);
   }
+  strip.show();
 }
 
-/*
-void loop() { 
+float shake(int x,int y,int z){
+  return sqrt(pow(x,2)+pow(y,2)+pow(z,2));
+}
 
-  // 受信バッファに３バイト（ヘッダ＋int）以上のデータが着ているか確認
-  if ( Serial.available() >= sizeof('X') + sizeof(int) ) {
-    // ヘッダの確認
-    if ( Serial.read() == 'X' ) {
-      int low = Serial.read(); // 下位バイトの読み取り
-      int high = Serial.read(); // 上位バイトの読み取り
-      recv_data = makeWord(high,low); // 上位バイトと下位バイトを合体させてint型データを復元
-      
-    }
-  }
 
-  // 受信したデータに基づいてLEDをON/OFF
-  if ( recv_data < 400 ) {
-//    digitalWrite(13, HIGH);
-//      Serial.print("LOW");
-  }
-  else if ( recv_data > 400 ) {
-//    digitalWrite(13, LOW);
-//      Serial.print("HIGH");
-  }
-  Serial.print(recv_data);
-}*/
